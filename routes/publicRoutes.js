@@ -1,28 +1,56 @@
+// routes/publicRoutes.js
 const express = require("express");
 const router = express.Router();
 const Course = require("../models/Course");
 const SuccessStory = require("../models/SuccessStory");
 const GalleryItem = require("../models/GalleryItem");
+const FaqItem = require("../models/FaqItem");
 
 // public fetch routes
 router.get("/courses", async (req, res) => {
-  const courses = await Course.find().sort({ createdAt: -1 });
-  res.json(courses);
+  try {
+    const courses = await Course.find().sort({ createdAt: -1 });
+    res.json(courses);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 router.get("/courses/:id", async (req, res) => {
-  const course = await Course.findById(req.params.id);
-  res.json(course);
+  try {
+    const course = await Course.findById(req.params.id);
+    res.json(course);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 router.get("/successStories", async (req, res) => {
-  const s = await SuccessStory.find().sort({ createdAt: -1 });
-  res.json(s);
+  try {
+    const s = await SuccessStory.find().sort({ createdAt: -1 });
+    res.json(s);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 router.get("/gallery", async (req, res) => {
-  const g = await GalleryItem.find().sort({ createdAt: -1 });
-  res.json(g);
+  try {
+    const g = await GalleryItem.find().sort({ createdAt: -1 });
+    res.json(g);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// public FAQs
+router.get("/faqs", async (req, res) => {
+  try {
+    const faqs = await FaqItem.find().sort({ createdAt: -1 });
+    res.json(faqs);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 module.exports = router;
