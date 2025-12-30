@@ -3,8 +3,9 @@ const express = require("express");
 const router = express.Router();
 const Course = require("../models/Course");
 const SuccessStory = require("../models/SuccessStory");
-const GalleryItem = require("../models/GalleryItem");
-const FaqItem = require("../models/FaqItem");
+const Faq = require("../models/Faq");
+// const GalleryItem = require("../models/GalleryItem");
+// const FaqItem = require("../models/FaqItem");
 
 // public fetch routes
 router.get("/courses", async (req, res) => {
@@ -46,10 +47,11 @@ router.get("/gallery", async (req, res) => {
 // public FAQs
 router.get("/faqs", async (req, res) => {
   try {
-    const faqs = await FaqItem.find().sort({ createdAt: -1 });
+    const faqs = await Faq.find().sort({ createdAt: -1 });
     res.json(faqs);
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("GET /faqs error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
