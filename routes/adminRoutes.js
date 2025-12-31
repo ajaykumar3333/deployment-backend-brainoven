@@ -43,10 +43,21 @@ router.post("/successStories", auth, upload.single("image"), ctrl.createStory);
 router.put("/successStories/:id", auth, upload.single("image"), ctrl.updateStory);
 router.delete("/successStories/:id", auth, ctrl.deleteStory);
 
-// gallery (unchanged)
-router.post("/gallery", auth, ctrl.createGallery);
-router.put("/gallery/:id", auth, ctrl.updateGallery);
-router.delete("/gallery/:id", auth, ctrl.deleteGallery);
+// ==================== GALLERY FOLDER ROUTES ====================
+// Create a new folder
+router.post("/gallery-folders", auth, ctrl.createGalleryFolder);
+
+// Get all folders (admin can use this too, but it's also in publicRoutes)
+router.get("/gallery-folders", auth, ctrl.getGalleryFolders);
+
+// Delete a folder
+router.delete("/gallery-folders/:id", auth, ctrl.deleteGalleryFolder);
+
+// Add image(s) to a folder - upload.array('images', 10) allows up to 10 images
+router.post("/gallery-folders/:folderId/images", auth, upload.array("images", 10), ctrl.addImageToFolder);
+
+// Delete a single image from a folder
+router.delete("/gallery-folders/:folderId/images/:imageId", auth, ctrl.deleteImageFromFolder);
 
 // faqs
 router.post("/faqs", auth, ctrl.createFaq);

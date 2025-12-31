@@ -2,7 +2,7 @@
 const mongoose = require("mongoose");
 
 const ImageSchema = new mongoose.Schema({
-  url: { type: String, required: true }, // stored path e.g. /uploads/gallery/xxx.jpg
+  url: { type: String, required: true }, // stored path e.g. /uploads/xxx.jpg
   caption: { type: String, default: "" },
   createdAt: { type: Date, default: Date.now },
 });

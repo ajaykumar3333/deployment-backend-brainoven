@@ -2,8 +2,7 @@
 const Admin = require("../models/Admin");
 const Course = require("../models/Course");
 const SuccessStory = require("../models/SuccessStory");
-// const GalleryItem = require("../models/GalleryItem");
-// const FaqItem = require("../models/FaqItem");
+const GalleryFolder = require("../models/GalleryFolder");
 const Faq = require("../models/Faq");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
@@ -143,15 +142,124 @@ exports.deleteStory = async (req, res) => {
   }
 };
 
-// Gallery CRUD (left as-is; keep commented models in top adapted if needed)
-exports.createGallery = async (req, res) => {
-  try { const g = new GalleryItem(req.body); await g.save(); res.json(g); } catch (e) { res.status(500).json({ message: "Error creating gallery item" }); }
+// ==================== GALLERY FOLDER CRUD ====================
+
+// Create a new folder
+exports.createGalleryFolder = async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ message: "Folder name is required" });
+
+    const folder = new GalleryFolder({ name, images: [] });
+    await folder.save();
+    res.json(folder);
+  } catch (e) {
+    console.error("createGalleryFolder error:", e);
+    res.status(500).json({ message: "Error creating folder" });
+  }
 };
-exports.updateGallery = async (req, res) => {
-  try { const updated = await GalleryItem.findByIdAndUpdate(req.params.id, req.body, { new: true }); res.json(updated); } catch (e) { res.status(500).json({ message: "Error updating gallery item" }); }
+
+// Get all folders
+exports.getGalleryFolders = async (req, res) => {
+  try {
+    const folders = await GalleryFolder.find().sort({ createdAt: -1 });
+    res.json(folders);
+  } catch (e) {
+    console.error("getGalleryFolders error:", e);
+    res.status(500).json({ message: "Error fetching folders" });
+  }
 };
-exports.deleteGallery = async (req, res) => {
-  try { await GalleryItem.findByIdAndDelete(req.params.id); res.json({ message: "Deleted" }); } catch (e) { res.status(500).json({ message: "Error deleting gallery item" }); }
+
+// Delete a folder (and all its images)
+exports.deleteGalleryFolder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const folder = await GalleryFolder.findById(id);
+    if (!folder) return res.status(404).json({ message: "Folder not found" });
+
+    // Delete all image files from disk
+    folder.images.forEach(img => {
+      try {
+        const pathname = getUploadPathFromUrl(img.url);
+        if (pathname && pathname.startsWith("/uploads/")) {
+          const filename = path.basename(pathname);
+          const fullPath = path.join(__dirname, "..", "uploads", filename);
+          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        }
+      } catch (err) {
+        console.warn("Could not delete image file:", err.message);
+      }
+    });
+
+    await GalleryFolder.findByIdAndDelete(id);
+    res.json({ message: "Folder deleted" });
+  } catch (e) {
+    console.error("deleteGalleryFolder error:", e);
+    res.status(500).json({ message: "Error deleting folder" });
+  }
+};
+
+// Add image(s) to a folder
+exports.addImageToFolder = async (req, res) => {
+  try {
+    const { folderId } = req.params;
+    const folder = await GalleryFolder.findById(folderId);
+    if (!folder) return res.status(404).json({ message: "Folder not found" });
+
+    // req.files is an array when using upload.array('images')
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No images uploaded" });
+    }
+
+    const caption = req.body.caption || "";
+
+    // Add each uploaded file to the folder's images array
+    req.files.forEach(file => {
+      folder.images.push({
+        url: `/uploads/${file.filename}`,
+        caption,
+        createdAt: new Date(),
+      });
+    });
+
+    await folder.save();
+    res.json(folder);
+  } catch (e) {
+    console.error("addImageToFolder error:", e);
+    res.status(500).json({ message: "Error adding images" });
+  }
+};
+
+// Delete a single image from a folder
+exports.deleteImageFromFolder = async (req, res) => {
+  try {
+    const { folderId, imageId } = req.params;
+    const folder = await GalleryFolder.findById(folderId);
+    if (!folder) return res.status(404).json({ message: "Folder not found" });
+
+    const image = folder.images.id(imageId);
+    if (!image) return res.status(404).json({ message: "Image not found" });
+
+    // Delete the file from disk
+    try {
+      const pathname = getUploadPathFromUrl(image.url);
+      if (pathname && pathname.startsWith("/uploads/")) {
+        const filename = path.basename(pathname);
+        const fullPath = path.join(__dirname, "..", "uploads", filename);
+        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+      }
+    } catch (err) {
+      console.warn("Could not delete image file:", err.message);
+    }
+
+    // Remove from array
+    folder.images.pull(imageId);
+    await folder.save();
+    res.json(folder);
+  } catch (e) {
+    console.error("deleteImageFromFolder error:", e);
+    res.status(500).json({ message: "Error deleting image" });
+  }
 };
 
 // FAQs CRUD (unchanged)

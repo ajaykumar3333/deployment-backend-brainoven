@@ -4,8 +4,7 @@ const router = express.Router();
 const Course = require("../models/Course");
 const SuccessStory = require("../models/SuccessStory");
 const Faq = require("../models/Faq");
-// const GalleryItem = require("../models/GalleryItem");
-// const FaqItem = require("../models/FaqItem");
+const GalleryFolder = require("../models/GalleryFolder");
 
 // public fetch routes
 router.get("/courses", async (req, res) => {
@@ -35,11 +34,13 @@ router.get("/successStories", async (req, res) => {
   }
 });
 
-router.get("/gallery", async (req, res) => {
+// Gallery folders - public endpoint
+router.get("/gallery-folders", async (req, res) => {
   try {
-    const g = await GalleryItem.find().sort({ createdAt: -1 });
-    res.json(g);
+    const folders = await GalleryFolder.find().sort({ createdAt: -1 });
+    res.json(folders);
   } catch (err) {
+    console.error("GET /gallery-folders error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
