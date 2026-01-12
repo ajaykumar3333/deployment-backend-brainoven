@@ -6,8 +6,7 @@ const GalleryFolder = require("../models/GalleryFolder");
 const Faq = require("../models/Faq");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const fs = require("fs");
-const path = require("path");
+const { cloudinary } = require("../config/cloudinary");
 
 // --- Auth/login ---
 exports.login = async (req, res) => {
@@ -26,7 +25,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// Courses CRUD (unchanged)
+// Courses CRUD
 exports.createCourse = async (req, res) => {
   try {
     const c = new Course(req.body);
@@ -34,12 +33,14 @@ exports.createCourse = async (req, res) => {
     res.json(c);
   } catch (e) { res.status(500).json({ message: "Error creating course" }); }
 };
+
 exports.updateCourse = async (req, res) => {
   try {
     const updated = await Course.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(updated);
   } catch (e) { res.status(500).json({ message: "Error updating course" }); }
 };
+
 exports.deleteCourse = async (req, res) => {
   try {
     await Course.findByIdAndDelete(req.params.id);
@@ -47,28 +48,32 @@ exports.deleteCourse = async (req, res) => {
   } catch (e) { res.status(500).json({ message: "Error deleting" }); }
 };
 
-// --- Success stories CRUD (updated to handle uploads + file cleanup) ---
-function getUploadPathFromUrl(url) {
-  // handles cases like "/uploads/filename.jpg" or full URL "http://host/uploads/filename.jpg"
+// Helper to extract Cloudinary public_id from URL
+function getCloudinaryPublicId(url) {
   if (!url) return null;
   try {
-    const parsed = new URL(url, "http://localhost"); // base for relative paths
-    return parsed.pathname; // e.g. /uploads/filename.jpg
+    // Cloudinary URLs look like: https://res.cloudinary.com/cloud_name/image/upload/v123456/folder/filename.jpg
+    const parts = url.split('/');
+    const uploadIndex = parts.indexOf('upload');
+    if (uploadIndex === -1) return null;
+    
+    // Get everything after 'upload/v123456/' and remove file extension
+    const pathParts = parts.slice(uploadIndex + 2);
+    const fullPath = pathParts.join('/');
+    return fullPath.replace(/\.[^/.]+$/, ''); // remove extension
   } catch (err) {
-    return url;
+    return null;
   }
 }
 
+// --- Success stories CRUD ---
 exports.createStory = async (req, res) => {
   try {
     const data = { ...req.body };
 
-    // If a file was uploaded by multer, set imageUrl to a public path
-    if (req.file && req.file.filename) {
-      data.imageUrl = `/uploads/${req.file.filename}`;
-    } else if (req.body.imageUrl) {
-      // fallback: accept direct url if provided (backwards compatibility)
-      data.imageUrl = req.body.imageUrl;
+    // Cloudinary automatically uploads and req.file.path contains the URL
+    if (req.file && req.file.path) {
+      data.imageUrl = req.file.path; // Full Cloudinary URL
     }
 
     const s = new SuccessStory(data);
@@ -85,23 +90,20 @@ exports.updateStory = async (req, res) => {
     const id = req.params.id;
     const updates = { ...req.body };
 
-    // If new file uploaded, set new imageUrl and remove old file if present
-    if (req.file && req.file.filename) {
-      updates.imageUrl = `/uploads/${req.file.filename}`;
+    // If new file uploaded
+    if (req.file && req.file.path) {
+      updates.imageUrl = req.file.path;
 
-      // remove old file if exists
+      // Delete old image from Cloudinary
       const existing = await SuccessStory.findById(id);
       if (existing && existing.imageUrl) {
-        try {
-          const oldPathname = getUploadPathFromUrl(existing.imageUrl);
-          // only delete if it's inside /uploads
-          if (oldPathname && oldPathname.startsWith("/uploads/")) {
-            const filename = path.basename(oldPathname);
-            const fullPath = path.join(__dirname, "..", "uploads", filename);
-            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        const publicId = getCloudinaryPublicId(existing.imageUrl);
+        if (publicId) {
+          try {
+            await cloudinary.uploader.destroy(publicId);
+          } catch (err) {
+            console.warn("Could not delete old image from Cloudinary:", err.message);
           }
-        } catch (err) {
-          console.warn("Could not delete old story image:", err.message);
         }
       }
     }
@@ -120,17 +122,15 @@ exports.deleteStory = async (req, res) => {
     const existing = await SuccessStory.findById(id);
     if (!existing) return res.status(404).json({ message: "Not found" });
 
-    // delete the image file if it's inside /uploads
+    // Delete from Cloudinary
     if (existing.imageUrl) {
-      try {
-        const oldPathname = getUploadPathFromUrl(existing.imageUrl);
-        if (oldPathname && oldPathname.startsWith("/uploads/")) {
-          const filename = path.basename(oldPathname);
-          const fullPath = path.join(__dirname, "..", "uploads", filename);
-          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+      const publicId = getCloudinaryPublicId(existing.imageUrl);
+      if (publicId) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (err) {
+          console.warn("Could not delete image from Cloudinary:", err.message);
         }
-      } catch (err) {
-        console.warn("Could not delete story image:", err.message);
       }
     }
 
@@ -144,7 +144,6 @@ exports.deleteStory = async (req, res) => {
 
 // ==================== GALLERY FOLDER CRUD ====================
 
-// Create a new folder
 exports.createGalleryFolder = async (req, res) => {
   try {
     const { name } = req.body;
@@ -159,7 +158,6 @@ exports.createGalleryFolder = async (req, res) => {
   }
 };
 
-// Get all folders
 exports.getGalleryFolders = async (req, res) => {
   try {
     const folders = await GalleryFolder.find().sort({ createdAt: -1 });
@@ -170,26 +168,23 @@ exports.getGalleryFolders = async (req, res) => {
   }
 };
 
-// Delete a folder (and all its images)
 exports.deleteGalleryFolder = async (req, res) => {
   try {
     const { id } = req.params;
     const folder = await GalleryFolder.findById(id);
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
-    // Delete all image files from disk
-    folder.images.forEach(img => {
-      try {
-        const pathname = getUploadPathFromUrl(img.url);
-        if (pathname && pathname.startsWith("/uploads/")) {
-          const filename = path.basename(pathname);
-          const fullPath = path.join(__dirname, "..", "uploads", filename);
-          if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+    // Delete all images from Cloudinary
+    for (const img of folder.images) {
+      const publicId = getCloudinaryPublicId(img.url);
+      if (publicId) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (err) {
+          console.warn("Could not delete image from Cloudinary:", err.message);
         }
-      } catch (err) {
-        console.warn("Could not delete image file:", err.message);
       }
-    });
+    }
 
     await GalleryFolder.findByIdAndDelete(id);
     res.json({ message: "Folder deleted" });
@@ -199,24 +194,22 @@ exports.deleteGalleryFolder = async (req, res) => {
   }
 };
 
-// Add image(s) to a folder
 exports.addImageToFolder = async (req, res) => {
   try {
     const { folderId } = req.params;
     const folder = await GalleryFolder.findById(folderId);
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
-    // req.files is an array when using upload.array('images')
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No images uploaded" });
     }
 
     const caption = req.body.caption || "";
 
-    // Add each uploaded file to the folder's images array
+    // Add each uploaded file to the folder
     req.files.forEach(file => {
       folder.images.push({
-        url: `/uploads/${file.filename}`,
+        url: file.path, // Cloudinary URL
         caption,
         createdAt: new Date(),
       });
@@ -230,7 +223,6 @@ exports.addImageToFolder = async (req, res) => {
   }
 };
 
-// Delete a single image from a folder
 exports.deleteImageFromFolder = async (req, res) => {
   try {
     const { folderId, imageId } = req.params;
@@ -240,19 +232,16 @@ exports.deleteImageFromFolder = async (req, res) => {
     const image = folder.images.id(imageId);
     if (!image) return res.status(404).json({ message: "Image not found" });
 
-    // Delete the file from disk
-    try {
-      const pathname = getUploadPathFromUrl(image.url);
-      if (pathname && pathname.startsWith("/uploads/")) {
-        const filename = path.basename(pathname);
-        const fullPath = path.join(__dirname, "..", "uploads", filename);
-        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+    // Delete from Cloudinary
+    const publicId = getCloudinaryPublicId(image.url);
+    if (publicId) {
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (err) {
+        console.warn("Could not delete image from Cloudinary:", err.message);
       }
-    } catch (err) {
-      console.warn("Could not delete image file:", err.message);
     }
 
-    // Remove from array
     folder.images.pull(imageId);
     await folder.save();
     res.json(folder);
@@ -262,7 +251,7 @@ exports.deleteImageFromFolder = async (req, res) => {
   }
 };
 
-// FAQs CRUD (unchanged)
+// FAQs CRUD
 exports.createFaq = async (req, res) => {
   try {
     const { question, answer } = req.body;
