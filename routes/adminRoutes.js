@@ -9,12 +9,18 @@ const { storageStories, storageGallery } = require("../config/cloudinary");
 // Multer uploads for different purposes
 const uploadStory = multer({
   storage: storageStories,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 const uploadGallery = multer({
   storage: storageGallery,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+// Single image upload (reuse storageStories for why-choose)
+const upload = multer({
+  storage: storageStories,
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 // courses
@@ -22,17 +28,20 @@ router.post("/courses", auth, ctrl.createCourse);
 router.put("/courses/:id", auth, ctrl.updateCourse);
 router.delete("/courses/:id", auth, ctrl.deleteCourse);
 
-// success stories - use uploadStory
+// success stories
 router.post("/successStories", auth, uploadStory.single("image"), ctrl.createStory);
 router.put("/successStories/:id", auth, uploadStory.single("image"), ctrl.updateStory);
 router.delete("/successStories/:id", auth, ctrl.deleteStory);
 
-// ==================== GALLERY FOLDER ROUTES ====================
+// why-choose
+router.post("/why-choose", auth, upload.single("image"), ctrl.createWhyChoose);
+router.put("/why-choose/:id", auth, upload.single("image"), ctrl.updateWhyChoose);
+router.delete("/why-choose/:id", auth, ctrl.deleteWhyChoose);
+
+// gallery folders
 router.post("/gallery-folders", auth, ctrl.createGalleryFolder);
 router.get("/gallery-folders", auth, ctrl.getGalleryFolders);
 router.delete("/gallery-folders/:id", auth, ctrl.deleteGalleryFolder);
-
-// Add images to folder - use uploadGallery
 router.post("/gallery-folders/:folderId/images", auth, uploadGallery.array("images", 10), ctrl.addImageToFolder);
 router.delete("/gallery-folders/:folderId/images/:imageId", auth, ctrl.deleteImageFromFolder);
 

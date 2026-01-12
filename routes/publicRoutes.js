@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const Course = require("../models/Course");
 const SuccessStory = require("../models/SuccessStory");
+const WhyChoose = require("../models/WhyChoose");
 const Faq = require("../models/Faq");
 const GalleryFolder = require("../models/GalleryFolder");
 
@@ -41,6 +42,17 @@ router.get("/gallery-folders", async (req, res) => {
     res.json(folders);
   } catch (err) {
     console.error("GET /gallery-folders error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+ //why choose brainoven
+router.get("/why-choose", async (req, res) => {
+  try {
+    const items = await WhyChoose.find().sort({ order: 1, createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    console.error("GET /why-choose error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

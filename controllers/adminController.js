@@ -3,6 +3,7 @@ const Admin = require("../models/Admin");
 const Course = require("../models/Course");
 const SuccessStory = require("../models/SuccessStory");
 const GalleryFolder = require("../models/GalleryFolder");
+const WhyChoose = require("../models/WhyChoose"); // added for why choose brainoven
 const Faq = require("../models/Faq");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
@@ -283,5 +284,82 @@ exports.deleteFaq = async (req, res) => {
   } catch (err) {
     console.error("deleteFaq error:", err);
     return res.status(500).json({ error: err.message });
+  }
+};
+
+//why choose us
+
+exports.createWhyChoose = async (req, res) => {
+  try {
+    const data = { ...req.body };
+
+    // Cloudinary automatically uploads and req.file.path contains the URL
+    if (req.file && req.file.path) {
+      data.imageUrl = req.file.path;
+    }
+
+    const item = new WhyChoose(data);
+    await item.save();
+    res.json(item);
+  } catch (e) {
+    console.error("createWhyChoose error:", e);
+    res.status(500).json({ message: "Error creating why choose item" });
+  }
+};
+
+exports.updateWhyChoose = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const updates = { ...req.body };
+
+    // If new file uploaded
+    if (req.file && req.file.path) {
+      updates.imageUrl = req.file.path;
+
+      // Delete old image from Cloudinary
+      const existing = await WhyChoose.findById(id);
+      if (existing && existing.imageUrl) {
+        const publicId = getCloudinaryPublicId(existing.imageUrl);
+        if (publicId) {
+          try {
+            await cloudinary.uploader.destroy(publicId);
+          } catch (err) {
+            console.warn("Could not delete old image from Cloudinary:", err.message);
+          }
+        }
+      }
+    }
+
+    const updated = await WhyChoose.findByIdAndUpdate(id, updates, { new: true });
+    res.json(updated);
+  } catch (e) {
+    console.error("updateWhyChoose error:", e);
+    res.status(500).json({ message: "Error updating why choose item" });
+  }
+};
+
+exports.deleteWhyChoose = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const existing = await WhyChoose.findById(id);
+    if (!existing) return res.status(404).json({ message: "Not found" });
+
+    // Delete from Cloudinary
+    if (existing.imageUrl) {
+      const publicId = getCloudinaryPublicId(existing.imageUrl);
+      if (publicId) {
+        try {
+          await cloudinary.uploader.destroy(publicId);
+        } catch (err) {
+          console.warn("Could not delete image from Cloudinary:", err.message);
+        }
+      }
+    }
+
+    await WhyChoose.findByIdAndDelete(id);
+    res.json({ message: "Deleted" });
+  } catch (e) {
+    console.error("deleteWhyChoose error:", e);
+    res.status(500).json({ message: "Error deleting why choose item" });
   }
 };
